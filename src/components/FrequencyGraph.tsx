@@ -6,8 +6,8 @@ interface FrequencyGraphProps {
 }
 
 // Map frequency to Y position (log scale, trumpet range E3–C6)
-const MIN_FREQ = 150; // just below E3 (~165 Hz)
-const MAX_FREQ = 1100; // just above C6 (~1047 Hz)
+const MIN_FREQ = 150;
+const MAX_FREQ = 1100;
 const MIN_LOG = Math.log2(MIN_FREQ);
 const MAX_LOG = Math.log2(MAX_FREQ);
 
@@ -24,7 +24,6 @@ function centsToColor(cents: number, alpha = 0.8): string {
   return `rgba(231, 76, 60, ${alpha})`;
 }
 
-// Note lines to draw as subtle horizontal guides
 const NOTE_FREQUENCIES: [string, number][] = [
   ["E3", 164.81], ["A3", 220], ["Bb3", 233.08],
   ["C4", 261.63], ["F4", 349.23],
@@ -32,18 +31,21 @@ const NOTE_FREQUENCIES: [string, number][] = [
   ["F5", 698.46], ["Bb5", 932.33], ["C6", 1046.5],
 ];
 
-const SCROLL_SPEED = 1.5; // pixels per frame
-// Drawing head sits at the center of the screen
-const HEAD_POSITION = 0.5; // 0..1, fraction of width
+const SCROLL_SPEED = 1.5;
+
+// Point stored in screen coordinates. freq < 0 means gap.
+interface GraphPoint {
+  x: number;
+  freq: number;
+  cents: number;
+}
 
 const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
   let canvas: HTMLCanvasElement | undefined;
   let animId: number | undefined;
 
-  // Store points as [x, freq, cents] — x is in "world" coordinates
-  let points: [number, number, number][] = [];
-  let headX = 0;
-  let wasNull = true; // track silence gaps
+  let points: GraphPoint[] = [];
+  let wasNull = true;
 
   onMount(() => {
     if (!canvas) return;
@@ -59,7 +61,7 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
     const draw = () => {
       const w = canvas!.width;
       const h = canvas!.height;
-      const headScreenX = w * HEAD_POSITION;
+      const centerX = w * 0.5;
 
       ctx.clearRect(0, 0, w, h);
 
@@ -81,34 +83,30 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
       }
       ctx.restore();
 
+      // 1. Shift all existing points left
+      for (const p of points) {
+        p.x -= SCROLL_SPEED;
+      }
+
+      // 2. Remove points that fell off the left edge
+      while (points.length > 0 && points[0].x < -10) {
+        points.shift();
+      }
+
+      // 3. Add new point at the center if there's signal
       const hasSignal = props.frequency !== null;
-
-      // Always advance — the graph scrolls continuously
-      headX += SCROLL_SPEED;
-
       if (hasSignal) {
-        // If coming back from silence, insert a gap marker
         if (wasNull) {
-          points.push([headX, -1, 0]); // gap sentinel
+          // Insert gap marker so we don't connect across silence
+          points.push({ x: centerX, freq: -1, cents: 0 });
         }
-
-        points.push([headX, props.frequency!, props.cents]);
+        points.push({ x: centerX, freq: props.frequency!, cents: props.cents });
         wasNull = false;
       } else {
         wasNull = true;
       }
 
-      // Remove points that scrolled off the left edge
-      const cutoff = headX - headScreenX;
-      while (points.length > 0 && points[0][0] < cutoff) {
-        points.shift();
-      }
-
-      // Convert world X to screen X — dot is fixed at center,
-      // the entire graph slides left underneath it
-      const toScreenX = (wx: number) => headScreenX - (headX - wx);
-
-      // Draw the frequency line
+      // 4. Draw the line segments
       if (points.length >= 2) {
         ctx.save();
         ctx.lineWidth = 3;
@@ -116,20 +114,20 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
         ctx.lineCap = "round";
 
         for (let i = 1; i < points.length; i++) {
-          const [px, pf] = points[i - 1];
-          const [cx, cf, cc] = points[i];
+          const prev = points[i - 1];
+          const curr = points[i];
 
-          // Skip gap sentinels and large frequency jumps
-          if (pf < 0 || cf < 0) continue;
-          if (Math.abs(12 * Math.log2(cf / pf)) > 3) continue;
+          // Skip gaps and large frequency jumps
+          if (prev.freq < 0 || curr.freq < 0) continue;
+          if (Math.abs(12 * Math.log2(curr.freq / prev.freq)) > 3) continue;
 
-          const x1 = toScreenX(px);
-          const y1 = freqToY(pf, h);
-          const x2 = toScreenX(cx);
-          const y2 = freqToY(cf, h);
+          const x1 = prev.x;
+          const y1 = freqToY(prev.freq, h);
+          const x2 = curr.x;
+          const y2 = freqToY(curr.freq, h);
 
-          ctx.strokeStyle = centsToColor(cc);
-          ctx.shadowColor = centsToColor(cc);
+          ctx.strokeStyle = centsToColor(curr.cents);
+          ctx.shadowColor = centsToColor(curr.cents);
           ctx.shadowBlur = 12;
           ctx.beginPath();
           ctx.moveTo(x1, y1);
@@ -140,64 +138,65 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
         ctx.restore();
       }
 
-      // Draw the "drawing head" — always fixed at center
+      // 5. Draw the fixed center dot (the "pen")
       {
-        // Find the last real (non-gap) point for Y position
-        let lastFreq = -1;
-        let lastCents = 0;
+        // Find last real point for Y position
+        let dotY = h / 2;
+        let dotCents = 0;
+        let dotActive = false;
         for (let i = points.length - 1; i >= 0; i--) {
-          if (points[i][1] > 0) {
-            lastFreq = points[i][1];
-            lastCents = points[i][2];
+          if (points[i].freq > 0) {
+            dotY = freqToY(points[i].freq, h);
+            dotCents = points[i].cents;
+            dotActive = hasSignal;
             break;
           }
         }
 
-        const dotX = headScreenX;
-        const dotY = lastFreq > 0 ? freqToY(lastFreq, h) : h / 2;
-        const time = performance.now() / 1000;
-
         ctx.save();
 
-        if (hasSignal && lastFreq > 0) {
-          // Active: pulsing glow
-          const color = centsToColor(lastCents);
+        if (dotActive) {
+          const color = centsToColor(dotCents);
+          const time = performance.now() / 1000;
           const pulse = 1 + 0.3 * Math.sin(time * 6);
 
+          // Radial glow
           const glowRadius = 24 * pulse;
-          const gradient = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, glowRadius);
-          gradient.addColorStop(0, centsToColor(lastCents, 0.6));
-          gradient.addColorStop(0.5, centsToColor(lastCents, 0.15));
+          const gradient = ctx.createRadialGradient(centerX, dotY, 0, centerX, dotY, glowRadius);
+          gradient.addColorStop(0, centsToColor(dotCents, 0.6));
+          gradient.addColorStop(0.5, centsToColor(dotCents, 0.15));
           gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
           ctx.fillStyle = gradient;
           ctx.beginPath();
-          ctx.arc(dotX, dotY, glowRadius, 0, Math.PI * 2);
+          ctx.arc(centerX, dotY, glowRadius, 0, Math.PI * 2);
           ctx.fill();
 
+          // White core
           ctx.shadowColor = color;
           ctx.shadowBlur = 20;
           ctx.fillStyle = "white";
           ctx.beginPath();
-          ctx.arc(dotX, dotY, 5 * pulse, 0, Math.PI * 2);
+          ctx.arc(centerX, dotY, 5 * pulse, 0, Math.PI * 2);
           ctx.fill();
 
+          // Colored ring
           ctx.shadowBlur = 0;
           ctx.strokeStyle = color;
           ctx.lineWidth = 2;
           ctx.beginPath();
-          ctx.arc(dotX, dotY, 9 * pulse, 0, Math.PI * 2);
+          ctx.arc(centerX, dotY, 9 * pulse, 0, Math.PI * 2);
           ctx.stroke();
         } else {
-          // Idle: dim static dot
+          // Idle: dim dot
           ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
           ctx.beginPath();
-          ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+          ctx.arc(centerX, dotY, 4, 0, Math.PI * 2);
           ctx.fill();
 
           ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
           ctx.lineWidth = 1;
           ctx.beginPath();
-          ctx.arc(dotX, dotY, 8, 0, Math.PI * 2);
+          ctx.arc(centerX, dotY, 8, 0, Math.PI * 2);
           ctx.stroke();
         }
 
