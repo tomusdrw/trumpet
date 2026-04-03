@@ -83,10 +83,10 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
 
       const hasSignal = props.frequency !== null;
 
-      // Only advance when there's signal
-      if (hasSignal) {
-        headX += SCROLL_SPEED;
+      // Always advance — the graph scrolls continuously
+      headX += SCROLL_SPEED;
 
+      if (hasSignal) {
         // If coming back from silence, insert a gap marker
         if (wasNull) {
           points.push([headX, -1, 0]); // gap sentinel
@@ -104,7 +104,8 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
         points.shift();
       }
 
-      // Convert world X to screen X
+      // Convert world X to screen X — dot is fixed at center,
+      // the entire graph slides left underneath it
       const toScreenX = (wx: number) => headScreenX - (headX - wx);
 
       // Draw the frequency line
@@ -139,45 +140,66 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
         ctx.restore();
       }
 
-      // Draw the "drawing head" — flashy dot at the current position
-      if (hasSignal && points.length > 0) {
-        const lastPoint = points[points.length - 1];
-        const dotX = toScreenX(lastPoint[0]);
-        const dotY = freqToY(lastPoint[1], h);
-        const color = centsToColor(lastPoint[2]);
+      // Draw the "drawing head" — always fixed at center
+      {
+        // Find the last real (non-gap) point for Y position
+        let lastFreq = -1;
+        let lastCents = 0;
+        for (let i = points.length - 1; i >= 0; i--) {
+          if (points[i][1] > 0) {
+            lastFreq = points[i][1];
+            lastCents = points[i][2];
+            break;
+          }
+        }
 
-        // Outer glow pulse
+        const dotX = headScreenX;
+        const dotY = lastFreq > 0 ? freqToY(lastFreq, h) : h / 2;
         const time = performance.now() / 1000;
-        const pulse = 1 + 0.3 * Math.sin(time * 6);
 
         ctx.save();
 
-        // Large soft glow
-        const glowRadius = 24 * pulse;
-        const gradient = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, glowRadius);
-        gradient.addColorStop(0, centsToColor(lastPoint[2], 0.6));
-        gradient.addColorStop(0.5, centsToColor(lastPoint[2], 0.15));
-        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
-        ctx.fillStyle = gradient;
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, glowRadius, 0, Math.PI * 2);
-        ctx.fill();
+        if (hasSignal && lastFreq > 0) {
+          // Active: pulsing glow
+          const color = centsToColor(lastCents);
+          const pulse = 1 + 0.3 * Math.sin(time * 6);
 
-        // Inner bright core
-        ctx.shadowColor = color;
-        ctx.shadowBlur = 20;
-        ctx.fillStyle = "white";
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, 5 * pulse, 0, Math.PI * 2);
-        ctx.fill();
+          const glowRadius = 24 * pulse;
+          const gradient = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, glowRadius);
+          gradient.addColorStop(0, centsToColor(lastCents, 0.6));
+          gradient.addColorStop(0.5, centsToColor(lastCents, 0.15));
+          gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+          ctx.fillStyle = gradient;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, glowRadius, 0, Math.PI * 2);
+          ctx.fill();
 
-        // Colored ring
-        ctx.shadowBlur = 0;
-        ctx.strokeStyle = color;
-        ctx.lineWidth = 2;
-        ctx.beginPath();
-        ctx.arc(dotX, dotY, 9 * pulse, 0, Math.PI * 2);
-        ctx.stroke();
+          ctx.shadowColor = color;
+          ctx.shadowBlur = 20;
+          ctx.fillStyle = "white";
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 5 * pulse, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.shadowBlur = 0;
+          ctx.strokeStyle = color;
+          ctx.lineWidth = 2;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 9 * pulse, 0, Math.PI * 2);
+          ctx.stroke();
+        } else {
+          // Idle: dim static dot
+          ctx.fillStyle = "rgba(255, 255, 255, 0.15)";
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 4, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.strokeStyle = "rgba(255, 255, 255, 0.1)";
+          ctx.lineWidth = 1;
+          ctx.beginPath();
+          ctx.arc(dotX, dotY, 8, 0, Math.PI * 2);
+          ctx.stroke();
+        }
 
         ctx.restore();
       }
