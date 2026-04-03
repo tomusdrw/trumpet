@@ -6,8 +6,11 @@ export interface PitchDetector {
 
 const BUFFER_SIZE = 4096;
 const CORRELATION_THRESHOLD = 0.9;
-const MIN_PERIOD = 10;
-const MAX_PERIOD = 800;
+// Trumpet range: E3 (~165 Hz) to C6 (~1047 Hz)
+// At 44100 Hz: period for 1047 Hz ≈ 42, period for 165 Hz ≈ 267
+// Add some headroom on both ends
+const MIN_PERIOD = 35;  // ~1260 Hz ceiling
+const MAX_PERIOD = 300; // ~147 Hz floor
 
 function autocorrelate(buffer: Float32Array, sampleRate: number): number | null {
   // Check if there's enough signal (RMS)
