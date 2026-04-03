@@ -52,3 +52,119 @@ body {
   width: 100%;
   padding: 20px;
 }
+
+/* Dial */
+.dial {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin: 20px 0;
+}
+
+.dial svg {
+  display: block;
+}
+
+.dial-cents {
+  font-size: 24px;
+  font-weight: 600;
+  margin-top: -10px;
+}
+
+/* Fingering chart */
+.fingering-chart {
+  display: flex;
+  justify-content: center;
+  margin: 10px 0;
+}
+
+/* Theme toggle */
+.theme-toggle {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  background: var(--bg-surface);
+  color: var(--text-primary);
+  border: 1px solid var(--text-secondary);
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  font-size: 20px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+
+.theme-toggle:hover {
+  background: var(--text-secondary);
+}
+
+/* Tuner */
+.tuner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.tuner-note {
+  margin-bottom: 4px;
+}
+
+.tuner-note-name {
+  font-size: 80px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.tuner-note-octave {
+  font-size: 32px;
+  font-weight: 400;
+  vertical-align: sub;
+  color: var(--text-secondary);
+}
+
+.tuner-frequency {
+  font-size: 16px;
+  color: var(--text-secondary);
+  margin-bottom: 10px;
+}
+
+/* Start / Error screens */
+.start-screen,
+.error-screen {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.start-subtitle {
+  color: var(--text-secondary);
+  font-size: 18px;
+}
+
+.start-button {
+  margin-top: 20px;
+  padding: 16px 48px;
+  font-size: 20px;
+  font-weight: 600;
+  background: var(--accent-green);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+
+.start-button:hover {
+  opacity: 0.85;
+}
+
+.error-message {
+  color: var(--accent-red);
+  font-size: 16px;
+  max-width: 360px;
+  line-height: 1.5;
+}
