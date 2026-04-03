@@ -51,6 +51,21 @@ body {
   max-width: 480px;
   width: 100%;
   padding: 20px;
+  position: relative;
+  z-index: 1;
+}
+
+/* Background frequency graph */
+.frequency-graph {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+  filter: blur(2px);
+  opacity: 0.5;
 }
 
 /* Dial */

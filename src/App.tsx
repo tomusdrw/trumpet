@@ -1,7 +1,9 @@
 import { createSignal, onCleanup, onMount, type Component } from "solid-js";
 import ThemeToggle from "./components/ThemeToggle";
 import Tuner from "./components/Tuner";
+import FrequencyGraph from "./components/FrequencyGraph";
 import { createPitchDetector } from "./audio/pitch-detector";
+import { frequencyToNote } from "./audio/notes";
 
 const App: Component = () => {
   const [started, setStarted] = createSignal(false);
@@ -51,9 +53,17 @@ const App: Component = () => {
     detector.stop();
   });
 
+  const cents = () => {
+    const f = frequency();
+    if (f === null) return 0;
+    const info = frequencyToNote(f);
+    return info?.cents ?? 0;
+  };
+
   return (
     <div class="app">
       <ThemeToggle />
+      {started() && <FrequencyGraph frequency={frequency()} cents={cents()} />}
 
       {!loading() && !started() && !error() && (
         <div class="start-screen">
