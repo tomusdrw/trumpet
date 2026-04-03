@@ -1,10 +1,11 @@
-import { createSignal, onCleanup, type Component } from "solid-js";
+import { createSignal, onCleanup, onMount, type Component } from "solid-js";
 import ThemeToggle from "./components/ThemeToggle";
 import Tuner from "./components/Tuner";
 import { createPitchDetector } from "./audio/pitch-detector";
 
 const App: Component = () => {
   const [started, setStarted] = createSignal(false);
+  const [loading, setLoading] = createSignal(true);
   const [error, setError] = createSignal<string | null>(null);
   const [frequency, setFrequency] = createSignal<number | null>(null);
 
@@ -33,6 +34,18 @@ const App: Component = () => {
     }
   };
 
+  onMount(async () => {
+    try {
+      const status = await navigator.permissions.query({ name: "microphone" as PermissionName });
+      if (status.state === "granted") {
+        await startListening();
+      }
+    } catch {
+      // permissions API not supported, show start button
+    }
+    setLoading(false);
+  });
+
   onCleanup(() => {
     if (animationId !== undefined) cancelAnimationFrame(animationId);
     detector.stop();
@@ -42,7 +55,7 @@ const App: Component = () => {
     <div class="app">
       <ThemeToggle />
 
-      {!started() && !error() && (
+      {!loading() && !started() && !error() && (
         <div class="start-screen">
           <h1>Trumpet Tuner</h1>
           <p class="start-subtitle">

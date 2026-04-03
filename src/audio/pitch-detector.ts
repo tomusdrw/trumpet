@@ -4,10 +4,10 @@ export interface PitchDetector {
   getFrequency(): number | null;
 }
 
-const BUFFER_SIZE = 2048;
-const MIN_CORRELATION = 0.9;
+const BUFFER_SIZE = 4096;
+const CORRELATION_THRESHOLD = 0.9;
 const MIN_PERIOD = 10;
-const MAX_PERIOD = 500;
+const MAX_PERIOD = 800;
 
 function autocorrelate(buffer: Float32Array, sampleRate: number): number | null {
   // Check if there's enough signal (RMS)
@@ -18,10 +18,9 @@ function autocorrelate(buffer: Float32Array, sampleRate: number): number | null 
   rms = Math.sqrt(rms / buffer.length);
   if (rms < 0.01) return null;
 
-  let bestCorrelation = 0;
-  let bestPeriod = 0;
-
-  for (let period = MIN_PERIOD; period < MAX_PERIOD && period < buffer.length / 2; period++) {
+  // Compute normalized correlation for each candidate period
+  const correlations = new Float32Array(MAX_PERIOD + 1);
+  for (let period = MIN_PERIOD; period <= MAX_PERIOD && period < buffer.length / 2; period++) {
     let correlation = 0;
     let norm1 = 0;
     let norm2 = 0;
@@ -33,42 +32,46 @@ function autocorrelate(buffer: Float32Array, sampleRate: number): number | null 
     }
 
     const norm = Math.sqrt(norm1 * norm2);
-    if (norm === 0) continue;
-    correlation /= norm;
+    correlations[period] = norm === 0 ? 0 : correlation / norm;
+  }
 
-    if (correlation > bestCorrelation) {
-      bestCorrelation = correlation;
-      bestPeriod = period;
+  // Find the FIRST correlation peak above threshold.
+  // This avoids octave errors — the fundamental period comes before
+  // its multiples (2x, 3x...) which also have high correlation.
+  let foundPeriod = 0;
+  let rising = false;
+  for (let period = MIN_PERIOD; period <= MAX_PERIOD && period < buffer.length / 2; period++) {
+    if (correlations[period] > correlations[period - 1]) {
+      rising = true;
+    } else if (rising && correlations[period] < correlations[period - 1]) {
+      // We just passed a peak at period-1
+      if (correlations[period - 1] >= CORRELATION_THRESHOLD) {
+        foundPeriod = period - 1;
+        break;
+      }
+      rising = false;
     }
   }
 
-  if (bestCorrelation < MIN_CORRELATION) return null;
-  if (bestPeriod === 0) return null;
+  if (foundPeriod === 0) return null;
 
   // Parabolic interpolation for sub-sample accuracy
-  const prev = bestPeriod > 0 ? correlationAt(buffer, bestPeriod - 1) : 0;
-  const curr = correlationAt(buffer, bestPeriod);
-  const next = correlationAt(buffer, bestPeriod + 1);
-  const shift = (prev - next) / (2 * (prev - 2 * curr + next));
-  const refinedPeriod = bestPeriod + (isFinite(shift) ? shift : 0);
+  const prev = correlations[foundPeriod - 1] ?? 0;
+  const curr = correlations[foundPeriod];
+  const next = correlations[foundPeriod + 1] ?? 0;
+  const denom = 2 * (prev - 2 * curr + next);
+  const shift = denom === 0 ? 0 : (prev - next) / denom;
+  const refinedPeriod = foundPeriod + (isFinite(shift) ? shift : 0);
 
   return sampleRate / refinedPeriod;
 }
 
-function correlationAt(buffer: Float32Array, period: number): number {
-  let correlation = 0;
-  for (let i = 0; i < buffer.length - period; i++) {
-    correlation += buffer[i] * buffer[i + period];
-  }
-  return correlation;
-}
-
 // Smoothing: exponential moving average factor (0 = no smoothing, 1 = frozen)
-const EMA_ALPHA = 0.7;
+const EMA_ALPHA = 0.85;
 // How many consecutive frames a new note must appear before we switch
-const NOTE_HOLD_FRAMES = 3;
+const NOTE_HOLD_FRAMES = 8;
 // How many silent frames before we clear the display
-const SILENCE_HOLD_FRAMES = 15;
+const SILENCE_HOLD_FRAMES = 20;
 
 export function createPitchDetector(): PitchDetector {
   let audioContext: AudioContext | null = null;
