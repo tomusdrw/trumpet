@@ -14,15 +14,14 @@ const MAX_LOG = Math.log2(MAX_FREQ);
 function freqToY(freq: number, height: number): number {
   const log = Math.log2(Math.max(MIN_FREQ, Math.min(MAX_FREQ, freq)));
   const ratio = (log - MIN_LOG) / (MAX_LOG - MIN_LOG);
-  // Invert so high frequencies are at top
   return height * (1 - ratio);
 }
 
-function centsToColor(cents: number): string {
+function centsToColor(cents: number, alpha = 0.8): string {
   const abs = Math.abs(cents);
-  if (abs <= 5) return "rgba(46, 204, 113, 0.8)";
-  if (abs <= 15) return "rgba(243, 156, 18, 0.8)";
-  return "rgba(231, 76, 60, 0.8)";
+  if (abs <= 5) return `rgba(46, 204, 113, ${alpha})`;
+  if (abs <= 15) return `rgba(243, 156, 18, ${alpha})`;
+  return `rgba(231, 76, 60, ${alpha})`;
 }
 
 // Note lines to draw as subtle horizontal guides
@@ -34,14 +33,17 @@ const NOTE_FREQUENCIES: [string, number][] = [
 ];
 
 const SCROLL_SPEED = 1.5; // pixels per frame
+// Drawing head sits at the center of the screen
+const HEAD_POSITION = 0.5; // 0..1, fraction of width
 
 const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
   let canvas: HTMLCanvasElement | undefined;
   let animId: number | undefined;
 
-  // Store recent frequency points as [x, freq, cents]
+  // Store points as [x, freq, cents] — x is in "world" coordinates
   let points: [number, number, number][] = [];
   let headX = 0;
+  let wasNull = true; // track silence gaps
 
   onMount(() => {
     if (!canvas) return;
@@ -57,6 +59,8 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
     const draw = () => {
       const w = canvas!.width;
       const h = canvas!.height;
+      const headScreenX = w * HEAD_POSITION;
+
       ctx.clearRect(0, 0, w, h);
 
       // Draw subtle note guide lines
@@ -77,54 +81,106 @@ const FrequencyGraph: Component<FrequencyGraphProps> = (props) => {
       }
       ctx.restore();
 
-      // Scroll: shift all points left
-      headX += SCROLL_SPEED;
+      const hasSignal = props.frequency !== null;
 
-      // Add current frequency
-      if (props.frequency !== null) {
-        points.push([headX, props.frequency, props.cents]);
+      // Only advance when there's signal
+      if (hasSignal) {
+        headX += SCROLL_SPEED;
+
+        // If coming back from silence, insert a gap marker
+        if (wasNull) {
+          points.push([headX, -1, 0]); // gap sentinel
+        }
+
+        points.push([headX, props.frequency!, props.cents]);
+        wasNull = false;
+      } else {
+        wasNull = true;
       }
 
-      // Remove points that scrolled off screen
-      const cutoff = headX - w;
+      // Remove points that scrolled off the left edge
+      const cutoff = headX - headScreenX;
       while (points.length > 0 && points[0][0] < cutoff) {
         points.shift();
       }
 
-      if (points.length < 2) {
-        animId = requestAnimationFrame(draw);
-        return;
+      // Convert world X to screen X
+      const toScreenX = (wx: number) => headScreenX - (headX - wx);
+
+      // Draw the frequency line
+      if (points.length >= 2) {
+        ctx.save();
+        ctx.lineWidth = 3;
+        ctx.lineJoin = "round";
+        ctx.lineCap = "round";
+
+        for (let i = 1; i < points.length; i++) {
+          const [px, pf] = points[i - 1];
+          const [cx, cf, cc] = points[i];
+
+          // Skip gap sentinels and large frequency jumps
+          if (pf < 0 || cf < 0) continue;
+          if (Math.abs(12 * Math.log2(cf / pf)) > 3) continue;
+
+          const x1 = toScreenX(px);
+          const y1 = freqToY(pf, h);
+          const x2 = toScreenX(cx);
+          const y2 = freqToY(cf, h);
+
+          ctx.strokeStyle = centsToColor(cc);
+          ctx.shadowColor = centsToColor(cc);
+          ctx.shadowBlur = 12;
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+        }
+
+        ctx.restore();
       }
 
-      // Draw the frequency line with glow
-      ctx.save();
-      ctx.lineWidth = 3;
-      ctx.lineJoin = "round";
-      ctx.lineCap = "round";
+      // Draw the "drawing head" — flashy dot at the current position
+      if (hasSignal && points.length > 0) {
+        const lastPoint = points[points.length - 1];
+        const dotX = toScreenX(lastPoint[0]);
+        const dotY = freqToY(lastPoint[1], h);
+        const color = centsToColor(lastPoint[2]);
 
-      // Draw segments colored by cents
-      for (let i = 1; i < points.length; i++) {
-        const [px, pf] = points[i - 1];
-        const [cx, cf, cc] = points[i];
+        // Outer glow pulse
+        const time = performance.now() / 1000;
+        const pulse = 1 + 0.3 * Math.sin(time * 6);
 
-        const x1 = w - (headX - px);
-        const y1 = freqToY(pf, h);
-        const x2 = w - (headX - cx);
-        const y2 = freqToY(cf, h);
+        ctx.save();
 
-        // Skip drawing segments that span too large a frequency gap (note change)
-        if (Math.abs(12 * Math.log2(cf / pf)) > 3) continue;
-
-        ctx.strokeStyle = centsToColor(cc);
-        ctx.shadowColor = centsToColor(cc);
-        ctx.shadowBlur = 12;
+        // Large soft glow
+        const glowRadius = 24 * pulse;
+        const gradient = ctx.createRadialGradient(dotX, dotY, 0, dotX, dotY, glowRadius);
+        gradient.addColorStop(0, centsToColor(lastPoint[2], 0.6));
+        gradient.addColorStop(0.5, centsToColor(lastPoint[2], 0.15));
+        gradient.addColorStop(1, "rgba(0, 0, 0, 0)");
+        ctx.fillStyle = gradient;
         ctx.beginPath();
-        ctx.moveTo(x1, y1);
-        ctx.lineTo(x2, y2);
-        ctx.stroke();
-      }
+        ctx.arc(dotX, dotY, glowRadius, 0, Math.PI * 2);
+        ctx.fill();
 
-      ctx.restore();
+        // Inner bright core
+        ctx.shadowColor = color;
+        ctx.shadowBlur = 20;
+        ctx.fillStyle = "white";
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 5 * pulse, 0, Math.PI * 2);
+        ctx.fill();
+
+        // Colored ring
+        ctx.shadowBlur = 0;
+        ctx.strokeStyle = color;
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.arc(dotX, dotY, 9 * pulse, 0, Math.PI * 2);
+        ctx.stroke();
+
+        ctx.restore();
+      }
 
       animId = requestAnimationFrame(draw);
     };
