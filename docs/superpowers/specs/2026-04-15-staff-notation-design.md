@@ -209,8 +209,10 @@ Treble clef reference: line 2 from the top is G4 (MIDI 67). For a given
 source MIDI note:
 
 1. Apply the fixed staff transposition: `displayMidi = sourceMidi + 2`.
-2. Pick a letter name + accidental consistent with the `notes.ts`
-   convention (flats for Bb/Eb/Ab, sharps for F#/C#/G#).
+2. Pick a letter name + accidental consistent with the existing
+   `notes.ts` convention: sharps for C# and F#, flats for Eb, Ab, Bb
+   (same spellings the current tuner already uses). Naturals for
+   C, D, E, F, G, A, B.
 3. Compute diatonic steps from G4:
    `stepsFromG4 = (letterIndex - G_INDEX) + 7 * (octave - 4)` where
    `C=0, D=1, E=2, F=3, G=4, A=5, B=6`.
