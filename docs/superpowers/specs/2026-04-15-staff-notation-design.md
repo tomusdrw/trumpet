@@ -135,9 +135,13 @@ Per frame with detection `d` at timestamp `t`:
    `windowTally[key]`.
 3. Recompute the current leader: the key with the highest count (ties →
    the most recently-incremented key).
-4. If the leader is a note and `d.midi === leader`, update
-   `windowWorstCents = max(windowWorstCents, |d.cents|)`. When the leader
-   changes, reset `windowWorstCents` and reseed from `d.cents` if applicable.
+4. Track `windowWorstCents` for the currently-leading note candidate only:
+   - If the leader is a note and `d.kind === "note"` and `d.midi === leader`,
+     set `windowWorstCents = max(windowWorstCents, |d.cents|)`.
+   - If the leader changed this frame, reset `windowWorstCents` to `0`.
+     If the new leader is a note and the current frame `d` matches it,
+     reseed with `|d.cents|`. If the new leader is a rest,
+     `windowWorstCents` is unused for the rest commit path.
 5. Publish the leader as the current ghost state.
 6. If `(t - windowStart) >= 250 ms`, close the window:
    - Let `candidate` be the final leader.
@@ -213,7 +217,7 @@ source MIDI note:
 4. `y = staffCenterY - stepsFromG4 * (LS / 2)` — each diatonic step is
    half a line-spacing.
 
-This math lives in `audio/staff-layout.ts` as pure functions.
+This math lives in `staff/staff-layout.ts` as pure functions.
 
 ### Notehead shape
 
@@ -224,9 +228,11 @@ stem. Fill color = the cents-zone color computed from the note's
 
 ### Accidentals
 
-Rendered as SVG `<text>` (with Unicode sharp/flat glyphs and a musical
-font fallback chain) or as a small `<path>` if Unicode rendering proves
-unreliable during implementation. Positioned to the left of the notehead,
+Rendered as SVG `<text>` with the Unicode glyphs `♯` (U+266F) / `♭`
+(U+266D) / `♮` (U+266E). Unlike the musical-symbol-block `𝄽` glyph that
+we rejected for rests, these sit in the Miscellaneous Symbols block and
+have excellent font coverage across platforms, so we commit to Unicode
+text without a `<path>` fallback. Positioned to the left of the notehead,
 same Y, offset by `~LS * 0.9` in X. Never stacked — we only ever have one
 accidental per committed event.
 
@@ -244,11 +250,12 @@ region to leave more room below the lines than above.
 
 ### Rests
 
-The Unicode `𝄽` glyph is rendered inconsistently across fonts and was
-visually bad in early mockups. Rests are rendered as a **hand-traced
-quarter-rest SVG `<path>`** exposed by a small function in
-`staff-layout.ts`, so the shape is font-independent and tweakable. A
-snapshot test covers the path so future tweaks are intentional.
+The Unicode `𝄽` glyph (U+1D13D, Musical Symbols block) is rendered
+inconsistently across fonts and was visually bad in early mockups.
+Rests are rendered as a **hand-traced quarter-rest SVG `<path>`** exposed
+by a small function in `staff/staff-layout.ts`, so the shape is
+font-independent and tweakable. A snapshot test covers the path so future
+tweaks are intentional.
 
 Rests carry no cents label.
 
@@ -263,8 +270,9 @@ Visual characteristics:
 - **Rest ghost:** the same rest path at `fill-opacity: 0.4`.
 - **Progress bar under the ghost:** two `<rect>`s — a background track in a
   muted color, and a foreground bar whose width advances from 0 to full
-  across the 250 ms window. The bar width is recomputed each frame as
-  `(now - windowStart) / 250`. It resets to 0 on each commit.
+  across the 250 ms window. The foreground width is `ghostState.progress`
+  (a 0..1 value returned from `engine.getGhost()` and updated on every
+  `engine.tick()`). It resets to 0 on each commit.
 
 ### Cents label
 
@@ -334,6 +342,8 @@ src/
     intonation.ts           — ADDED: shared cents-to-color function and
                               zone thresholds.
     intonation.test.ts      — ADDED.
+
+  staff/
     staff-engine.ts         — ADDED: the commit state machine. Pure TS,
                               no SolidJS. API:
                                 createStaffEngine(opts) => {
@@ -342,12 +352,17 @@ src/
                                   getCommitted(): readonly CommittedEvent[]
                                   clear(): void
                                 }
+                              where GhostState is:
+                                { candidate: CommittedEvent | null
+                                , progress: number   // 0..1 across window
+                                }
     staff-engine.test.ts    — ADDED: window majority vote, duplicate-note
                               suppression, duplicate-rest suppression,
                               empty-start "don't commit leading rest",
                               worst-cents tracking on winner only, clear
                               semantics, commit latency bounded to one
-                              250 ms window.
+                              250 ms window, progress fraction monotonic
+                              within a window and resets at commit.
     staff-layout.ts         — ADDED: pitch → Y math, accidental choice,
                               ledger-line set, quarter-rest SVG path.
                               Pure functions.
@@ -358,9 +373,10 @@ src/
 
   components/
     Staff.tsx               — ADDED: main staff SVG. Takes committed
-                              events + ghost state + progress fraction.
-                              Renders static staff lines + clef + committed
-                              notes + ghost. No internal state.
+                              events and ghost state (which carries the
+                              progress fraction). Renders static staff
+                              lines + clef + committed notes + ghost. No
+                              internal state.
     HeaderBar.tsx           — ADDED: horizontal HUD with note name,
                               frequency, horizontal cents dial, fingering
                               chart, transpose selector, clear button.
@@ -393,8 +409,8 @@ src/
 1. `App.tsx` creates `createPitchDetector()` and `createStaffEngine()`.
 2. A `requestAnimationFrame` loop reads the detector's frequency each frame,
    builds a `Detection`, and calls `engine.tick(detection, performance.now())`.
-3. A SolidJS signal wraps the engine's current `{ committed, ghost, progress }`
-   snapshot and re-publishes it each frame.
+3. A SolidJS signal wraps the engine's current `{ committed, ghost }` snapshot
+   (where `ghost` is `{ candidate, progress }`) and re-publishes it each frame.
 4. `<Staff />` reads the snapshot and renders. Staff-rendering always applies
    the fixed `+2` semitone staff transposition, independent of the header
    selector.
