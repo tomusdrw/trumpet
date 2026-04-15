@@ -184,3 +184,49 @@ describe("createStaffEngine — suppression", () => {
     expect(c[1]).toMatchObject({ kind: "note", midi: 74 });
   });
 });
+
+describe("createStaffEngine — worst-cents tracking", () => {
+  it("records the max |cents| across all same-leader frames", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72, 3), 0);
+    e.tick(note(72, -12), 25);
+    e.tick(note(72, 7), 50);
+    e.tick(note(72, -1), 75);
+    e.tick(note(72, 4), 100); // closes window
+    const c = e.getCommitted();
+    expect(c).toHaveLength(1);
+    expect(c[0]).toEqual<CommittedEvent>({
+      kind: "note",
+      midi: 72,
+      worstCents: 12,
+    });
+  });
+
+  it("discards cents from a losing candidate", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    // Frame 1: D5 with -30 cents (briefly leads).
+    e.tick(note(74, -30), 0);
+    // Frames 2-5: C5 — wins by count; its worstCents is max 4.
+    e.tick(note(72, 2), 25);
+    e.tick(note(72, 3), 50);
+    e.tick(note(72, 4), 75);
+    e.tick(note(72, 1), 100); // closes window
+    const c = e.getCommitted();
+    expect(c).toHaveLength(1);
+    expect(c[0]).toEqual<CommittedEvent>({
+      kind: "note",
+      midi: 72,
+      worstCents: 4,
+    });
+  });
+
+  it("commits a rest without cents tracking", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72, 5), 0);
+    e.tick(note(72, 5), 100); // commit C5
+    e.tick(rest(), 100);
+    e.tick(rest(), 200); // commit rest
+    const c = e.getCommitted();
+    expect(c[1]).toEqual<CommittedEvent>({ kind: "rest" });
+  });
+});
