@@ -91,6 +91,15 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
       ) {
         leaderWorstCents = Math.max(leaderWorstCents, Math.abs(d.cents));
       }
+
+      // Close the window?
+      if (nowTs - windowStart! >= windowMs) {
+        const event = leaderAsEvent();
+        if (event !== null) {
+          committed.push(event);
+        }
+        resetWindow(nowTs);
+      }
     },
 
     getGhost(): GhostState {
