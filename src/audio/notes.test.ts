@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { frequencyToNote } from "./notes";
+import {
+  frequencyToNote,
+  midiToStaffPitch,
+  type StaffPitch,
+} from "./notes";
 
 describe("frequencyToNote", () => {
   it("returns A4 for 440 Hz with 0 cents", () => {
@@ -62,5 +66,79 @@ describe("frequencyToNote", () => {
 
     const ab = frequencyToNote(415.30);
     expect(ab!.note).toBe("Ab");
+  });
+});
+
+describe("midiToStaffPitch", () => {
+  it("C4 (middle C) is C natural in octave 4", () => {
+    expect(midiToStaffPitch(60)).toEqual<StaffPitch>({
+      letter: "C",
+      accidental: "natural",
+      octave: 4,
+    });
+  });
+
+  it("A4 is A natural in octave 4", () => {
+    expect(midiToStaffPitch(69)).toEqual<StaffPitch>({
+      letter: "A",
+      accidental: "natural",
+      octave: 4,
+    });
+  });
+
+  it("Bb4 spells as B flat (not A sharp)", () => {
+    expect(midiToStaffPitch(70)).toEqual<StaffPitch>({
+      letter: "B",
+      accidental: "flat",
+      octave: 4,
+    });
+  });
+
+  it("Eb5 spells as E flat", () => {
+    expect(midiToStaffPitch(75)).toEqual<StaffPitch>({
+      letter: "E",
+      accidental: "flat",
+      octave: 5,
+    });
+  });
+
+  it("Ab4 spells as A flat (pitch class 8)", () => {
+    expect(midiToStaffPitch(68)).toEqual<StaffPitch>({
+      letter: "A",
+      accidental: "flat",
+      octave: 4,
+    });
+  });
+
+  it("C#5 spells as C sharp", () => {
+    expect(midiToStaffPitch(73)).toEqual<StaffPitch>({
+      letter: "C",
+      accidental: "sharp",
+      octave: 5,
+    });
+  });
+
+  it("F#4 spells as F sharp", () => {
+    expect(midiToStaffPitch(66)).toEqual<StaffPitch>({
+      letter: "F",
+      accidental: "sharp",
+      octave: 4,
+    });
+  });
+
+  it("C6 is C natural in octave 6 (boundary)", () => {
+    expect(midiToStaffPitch(84)).toEqual<StaffPitch>({
+      letter: "C",
+      accidental: "natural",
+      octave: 6,
+    });
+  });
+
+  it("B3 is B natural in octave 3 (just below middle C)", () => {
+    expect(midiToStaffPitch(59)).toEqual<StaffPitch>({
+      letter: "B",
+      accidental: "natural",
+      octave: 3,
+    });
   });
 });
