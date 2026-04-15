@@ -6,6 +6,7 @@ import {
   STAFF_BOTTOM_LINE_Y,
   displayMidiToY,
   ledgerLineYs,
+  accidentalPlacement,
 } from "./staff-layout";
 
 describe("displayMidiToY", () => {
@@ -88,5 +89,39 @@ describe("ledgerLineYs", () => {
       STAFF_BOTTOM_LINE_Y + LS,
       STAFF_BOTTOM_LINE_Y + 2 * LS,
     ]);
+  });
+});
+
+describe("accidentalPlacement", () => {
+  it("returns null for naturals", () => {
+    expect(accidentalPlacement(71)).toBeNull(); // B4
+    expect(accidentalPlacement(67)).toBeNull(); // G4
+    expect(accidentalPlacement(60)).toBeNull(); // C4
+  });
+
+  it("returns a sharp glyph for C#5 positioned left of the notehead", () => {
+    const p = accidentalPlacement(73);
+    expect(p).not.toBeNull();
+    expect(p!.glyph).toBe("♯");
+    expect(p!.y).toBe(displayMidiToY(73));
+    expect(p!.dx).toBeCloseTo(-LS * 0.9, 5);
+  });
+
+  it("returns a flat glyph for Bb4", () => {
+    const p = accidentalPlacement(70);
+    expect(p).not.toBeNull();
+    expect(p!.glyph).toBe("♭");
+    expect(p!.y).toBe(displayMidiToY(70));
+  });
+
+  it("returns a flat glyph for Eb5", () => {
+    const p = accidentalPlacement(75);
+    expect(p).not.toBeNull();
+    expect(p!.glyph).toBe("♭");
+  });
+
+  it("returns a sharp glyph for F#4", () => {
+    const p = accidentalPlacement(66);
+    expect(p!.glyph).toBe("♯");
   });
 });

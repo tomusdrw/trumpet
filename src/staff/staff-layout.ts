@@ -43,6 +43,34 @@ export function displayMidiToY(displayMidi: number): number {
   return STAFF_CENTER_Y - (step - MIDDLE_LINE_STEPS) * HALF_LINE;
 }
 
+export interface AccidentalPlacement {
+  glyph: "♯" | "♭" | "♮";
+  /** X offset from the notehead center (negative = left). */
+  dx: number;
+  /** Y position (same as notehead Y). */
+  y: number;
+}
+
+const ACCIDENTAL_DX = -LS * 0.9;
+
+/**
+ * Accidental glyph and position for a display MIDI note, or null if the
+ * note is a natural. Uses the Unicode sharp/flat characters from the
+ * Miscellaneous Symbols block (excellent font coverage).
+ */
+export function accidentalPlacement(
+  displayMidi: number,
+): AccidentalPlacement | null {
+  const pitch = midiToStaffPitch(displayMidi);
+  if (pitch.accidental === "natural") return null;
+  const glyph = pitch.accidental === "sharp" ? "♯" : "♭";
+  return {
+    glyph,
+    dx: ACCIDENTAL_DX,
+    y: displayMidiToY(displayMidi),
+  };
+}
+
 /**
  * Ledger lines required for a note outside the staff.
  * Empty when the note is inside the staff (E4..F5 inclusive).
