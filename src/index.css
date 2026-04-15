@@ -56,7 +56,10 @@ body {
   display: flex;
   align-items: center;
   gap: 20px;
-  padding: 12px 20px;
+  /* extra right padding reserves room for the fixed ThemeToggle
+     (40px wide, 16px from the right edge) so the Clear button does
+     not sit underneath it. */
+  padding: 12px 72px 12px 20px;
   background: var(--bg-surface);
   border-bottom: 1px solid var(--text-secondary);
 }

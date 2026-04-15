@@ -11,6 +11,8 @@ interface HeaderBarProps {
   ghost: CommittedEvent | null;
   transpose: number; // semitones; e.g. -2 for Bb trumpet
   onTransposeChange: (value: number) => void;
+  restDelayMs: number;
+  onRestDelayChange: (value: number) => void;
   onClear: () => void;
 }
 
@@ -67,6 +69,13 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
     if (!Number.isNaN(value)) props.onTransposeChange(value);
   };
 
+  const handleRestDelayChange = (e: Event) => {
+    const value = parseInt((e.currentTarget as HTMLInputElement).value, 10);
+    if (!Number.isNaN(value) && value >= 0) {
+      props.onRestDelayChange(value);
+    }
+  };
+
   return (
     <div class="header-bar">
       <div class="header-note">
@@ -90,6 +99,17 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
           step="1"
           value={props.transpose}
           onInput={handleTransposeChange}
+        />
+      </label>
+      <label class="header-transpose">
+        <span class="header-transpose-label">rest delay (ms)</span>
+        <input
+          type="number"
+          class="header-transpose-input"
+          step="50"
+          min="0"
+          value={props.restDelayMs}
+          onInput={handleRestDelayChange}
         />
       </label>
       <button class="header-clear" type="button" onClick={props.onClear}>

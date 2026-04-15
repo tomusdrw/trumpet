@@ -28,17 +28,38 @@ const App: Component = () => {
     progress: 0,
   });
   const [transpose, setTranspose] = createSignal(0);
+  const [restDelayMs, setRestDelayMs] = createSignal(500);
 
   const detector = createPitchDetector();
   const engine = createStaffEngine({ windowMs: 250 });
   let animationId: number | undefined;
 
-  const toDetection = (freq: number | null): Detection => {
-    if (freq === null) return { kind: "rest" };
-    const info = frequencyToNote(freq);
-    if (info === null) return { kind: "rest" };
-    const midi = Math.round(12 * Math.log2(freq / 440) + 69);
-    return { kind: "note", midi, cents: info.cents };
+  // Debounce silence so short legato gaps don't immediately commit rests:
+  // we remember the last note detection and substitute it while silence
+  // is shorter than `restDelayMs`. Only genuinely sustained silence is
+  // reported as a rest to the engine.
+  let lastNoteDetection: (Detection & { kind: "note" }) | null = null;
+  let lastNoteSeenAt = 0;
+
+  const toDetection = (freq: number | null, nowTs: number): Detection => {
+    if (freq !== null) {
+      const info = frequencyToNote(freq);
+      if (info !== null) {
+        const midi = Math.round(12 * Math.log2(freq / 440) + 69);
+        const d: Detection = { kind: "note", midi, cents: info.cents };
+        lastNoteDetection = d;
+        lastNoteSeenAt = nowTs;
+        return d;
+      }
+    }
+    // Silence (or bad reading) — debounce against the most recent note.
+    if (
+      lastNoteDetection !== null &&
+      nowTs - lastNoteSeenAt < restDelayMs()
+    ) {
+      return lastNoteDetection;
+    }
+    return { kind: "rest" };
   };
 
   const startListening = async () => {
@@ -48,15 +69,20 @@ const App: Component = () => {
       setError(null);
 
       const tick = () => {
+        const nowTs = performance.now();
         const freq = detector.getFrequency();
         setFrequency(freq);
-        const detection = toDetection(freq);
-        if (detection.kind === "note") {
-          setCents(detection.cents);
+        const detection = toDetection(freq, nowTs);
+        // Raw cents (from the detector) drive the live dial, independent
+        // of silence debouncing. When the mic is genuinely silent, show
+        // no cents even if the engine is still bridging a short gap.
+        if (freq !== null) {
+          const info = frequencyToNote(freq);
+          setCents(info?.cents ?? null);
         } else {
           setCents(null);
         }
-        engine.tick(detection, performance.now());
+        engine.tick(detection, nowTs);
         setCommitted([...engine.getCommitted()]);
         setGhost(engine.getGhost());
         animationId = requestAnimationFrame(tick);
@@ -111,6 +137,8 @@ const App: Component = () => {
             ghost={ghost().candidate}
             transpose={transpose()}
             onTransposeChange={setTranspose}
+            restDelayMs={restDelayMs()}
+            onRestDelayChange={setRestDelayMs}
             onClear={handleClear}
           />
           <Staff committed={committed()} ghost={ghost()} />
