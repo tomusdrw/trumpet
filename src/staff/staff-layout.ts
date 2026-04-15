@@ -1,0 +1,69 @@
+import { midiToStaffPitch } from "../audio/notes";
+
+export const LS = 14;
+export const STAFF_CENTER_Y = 80;
+export const STAFF_TRANSPOSE_SEMITONES = 2;
+
+export const STAFF_TOP_LINE_Y = STAFF_CENTER_Y - 2 * LS;
+export const STAFF_BOTTOM_LINE_Y = STAFF_CENTER_Y + 2 * LS;
+
+// Letter → index in the C-based diatonic scale.
+const LETTER_INDEX: Record<string, number> = {
+  C: 0, D: 1, E: 2, F: 3, G: 4, A: 5, B: 6,
+};
+
+const G_INDEX = LETTER_INDEX.G;
+const REFERENCE_OCTAVE = 4;
+
+// Middle line B4: stepsFromG4 = (6 - 4) + 0 = 2.
+const MIDDLE_LINE_STEPS = 2;
+
+// Each diatonic step covers LS/2 vertical pixels.
+const HALF_LINE = LS / 2;
+
+/**
+ * Diatonic steps of a displayMidi note counted from G4 (=0), positive = up.
+ * Uses the note's chosen letter-name spelling so C#5 and Db5 both sit at
+ * the same step (their accidentals are rendered separately).
+ */
+export function displayMidiToStep(displayMidi: number): number {
+  const pitch = midiToStaffPitch(displayMidi);
+  return (
+    (LETTER_INDEX[pitch.letter] - G_INDEX) +
+    7 * (pitch.octave - REFERENCE_OCTAVE)
+  );
+}
+
+/**
+ * Y position for a notehead, given an already-transposed display MIDI.
+ * Callers add STAFF_TRANSPOSE_SEMITONES to concert MIDI before calling.
+ */
+export function displayMidiToY(displayMidi: number): number {
+  const step = displayMidiToStep(displayMidi);
+  return STAFF_CENTER_Y - (step - MIDDLE_LINE_STEPS) * HALF_LINE;
+}
+
+/**
+ * Ledger lines required for a note outside the staff.
+ * Empty when the note is inside the staff (E4..F5 inclusive).
+ */
+export function ledgerLineYs(displayMidi: number): number[] {
+  const step = displayMidiToStep(displayMidi);
+  const stepFromMiddle = step - MIDDLE_LINE_STEPS;
+  const ys: number[] = [];
+
+  if (stepFromMiddle > 4) {
+    // Above the top line (F5 step +4). Emit a ledger at every even step
+    // above +4 up to the note's step.
+    for (let s = 6; s <= stepFromMiddle; s += 2) {
+      ys.push(STAFF_CENTER_Y - s * HALF_LINE);
+    }
+  } else if (stepFromMiddle < -4) {
+    // Below the bottom line (E4 step -4).
+    for (let s = -6; s >= stepFromMiddle; s -= 2) {
+      ys.push(STAFF_CENTER_Y - s * HALF_LINE);
+    }
+  }
+
+  return ys;
+}
