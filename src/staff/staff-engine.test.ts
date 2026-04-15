@@ -98,16 +98,20 @@ describe("createStaffEngine — majority-vote commit", () => {
     expect(c[0]).toMatchObject({ kind: "note", midi: 74 });
   });
 
-  it("commits a rest when silence wins the window (pre-suppression)", () => {
-    // Leading-rest suppression is added in Task 8; in this task the
-    // engine currently commits the rest winner unconditionally.
+  it("commits a rest when silence wins the window (after a note)", () => {
     const e = createStaffEngine({ windowMs: 250 });
-    e.tick(rest(), 0);
-    e.tick(rest(), 50);
-    e.tick(rest(), 100);
-    e.tick(rest(), 200);
+    // Seed a committed C5 first so `last !== null`.
+    e.tick(note(72), 0);
+    e.tick(note(72), 250); // window 1 closes → commit C5
+    // Now silence wins window 2.
     e.tick(rest(), 250);
-    expect(e.getCommitted()).toEqual<CommittedEvent[]>([{ kind: "rest" }]);
+    e.tick(rest(), 300);
+    e.tick(rest(), 400);
+    e.tick(rest(), 500); // window 2 closes → commit rest
+    expect(e.getCommitted()).toEqual<CommittedEvent[]>([
+      { kind: "note", midi: 72, worstCents: 0 },
+      { kind: "rest" },
+    ]);
   });
 
   it("commits a fresh note in each successive window", () => {
@@ -120,5 +124,63 @@ describe("createStaffEngine — majority-vote commit", () => {
       { kind: "note", midi: 72, worstCents: 0 },
       { kind: "note", midi: 74, worstCents: 0 },
     ]);
+  });
+});
+
+describe("createStaffEngine — suppression", () => {
+  it("does not commit a leading rest", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(rest(), 0);
+    e.tick(rest(), 50);
+    e.tick(rest(), 100); // window closes; leader = rest, last = null
+    expect(e.getCommitted()).toEqual([]);
+  });
+
+  it("does not commit consecutive rests", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    // window 1: C5 → commit
+    e.tick(note(72), 0);
+    e.tick(note(72), 100);
+    // window 2: rest → commit
+    e.tick(rest(), 100);
+    e.tick(rest(), 200);
+    // window 3: rest → SKIP (duplicate rest)
+    e.tick(rest(), 200);
+    e.tick(rest(), 300);
+    expect(e.getCommitted()).toEqual<CommittedEvent[]>([
+      { kind: "note", midi: 72, worstCents: 0 },
+      { kind: "rest" },
+    ]);
+  });
+
+  it("does not commit consecutive identical notes", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    // window 1: C5 → commit
+    e.tick(note(72), 0);
+    e.tick(note(72), 100);
+    // window 2: C5 again → SKIP
+    e.tick(note(72), 100);
+    e.tick(note(72), 200);
+    // window 3: D5 → commit
+    e.tick(note(74), 200);
+    e.tick(note(74), 300);
+    expect(e.getCommitted()).toEqual<CommittedEvent[]>([
+      { kind: "note", midi: 72, worstCents: 0 },
+      { kind: "note", midi: 74, worstCents: 0 },
+    ]);
+  });
+
+  it("commits a different note after a held note", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72), 0);
+    e.tick(note(72), 100); // commit C5
+    e.tick(note(72), 100);
+    e.tick(note(72), 200); // skip C5
+    e.tick(note(74), 200);
+    e.tick(note(74), 300); // commit D5
+    const c = e.getCommitted();
+    expect(c).toHaveLength(2);
+    expect(c[0]).toMatchObject({ kind: "note", midi: 72 });
+    expect(c[1]).toMatchObject({ kind: "note", midi: 74 });
   });
 });

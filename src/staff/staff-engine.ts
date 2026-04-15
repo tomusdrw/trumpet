@@ -27,10 +27,28 @@ export interface StaffEngine {
 
 type Key = "rest" | number;
 
+function shouldCommit(
+  candidate: CommittedEvent,
+  last: CommittedEvent | null,
+): boolean {
+  if (candidate.kind === "rest") {
+    // Never commit a leading rest or consecutive rests.
+    if (last === null) return false;
+    if (last.kind === "rest") return false;
+    return true;
+  }
+  // Note: suppress consecutive identical midi.
+  if (last !== null && last.kind === "note" && last.midi === candidate.midi) {
+    return false;
+  }
+  return true;
+}
+
 export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
   const windowMs = opts.windowMs ?? 250;
 
   const committed: CommittedEvent[] = [];
+  let last: CommittedEvent | null = null;
 
   let windowStart: number | null = null;
   let windowNow = 0;
@@ -95,8 +113,9 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
       // Close the window?
       if (nowTs - windowStart! >= windowMs) {
         const event = leaderAsEvent();
-        if (event !== null) {
+        if (event !== null && shouldCommit(event, last)) {
           committed.push(event);
+          last = event;
         }
         resetWindow(nowTs);
       }
@@ -117,6 +136,7 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
 
     clear() {
       committed.length = 0;
+      last = null;
       windowStart = null;
       windowNow = 0;
       tally.clear();
