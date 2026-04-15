@@ -230,3 +230,55 @@ describe("createStaffEngine — worst-cents tracking", () => {
     expect(c[1]).toEqual<CommittedEvent>({ kind: "rest" });
   });
 });
+
+describe("createStaffEngine — clear() and progress", () => {
+  it("clear() empties committed and resets ghost", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72), 0);
+    e.tick(note(72), 100); // commit
+    e.tick(note(74), 100);
+    e.tick(note(74), 150); // mid-window; ghost = D5
+    expect(e.getCommitted()).toHaveLength(1);
+    expect(e.getGhost().candidate).toMatchObject({ kind: "note", midi: 74 });
+
+    e.clear();
+    expect(e.getCommitted()).toEqual([]);
+    expect(e.getGhost()).toEqual<GhostState>({
+      candidate: null,
+      progress: 0,
+    });
+  });
+
+  it("clear() lets a new window start cleanly", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72), 0);
+    e.clear();
+    e.tick(note(74), 500);
+    e.tick(note(74), 600); // 100ms window → commit D5
+    expect(e.getCommitted()).toEqual<CommittedEvent[]>([
+      { kind: "note", midi: 74, worstCents: 0 },
+    ]);
+  });
+
+  it("progress advances from 0 to 1 within a window", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72), 0);
+    expect(e.getGhost().progress).toBe(0);
+
+    e.tick(note(72), 25);
+    expect(e.getGhost().progress).toBeCloseTo(0.25, 5);
+
+    e.tick(note(72), 50);
+    expect(e.getGhost().progress).toBeCloseTo(0.5, 5);
+
+    e.tick(note(72), 99);
+    expect(e.getGhost().progress).toBeCloseTo(0.99, 5);
+  });
+
+  it("progress resets to 0 after a commit closes a window", () => {
+    const e = createStaffEngine({ windowMs: 100 });
+    e.tick(note(72), 0);
+    e.tick(note(72), 100); // closes + commits; window reset at nowTs=100
+    expect(e.getGhost().progress).toBe(0);
+  });
+});
