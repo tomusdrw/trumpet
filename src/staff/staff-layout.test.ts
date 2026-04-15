@@ -7,6 +7,8 @@ import {
   displayMidiToY,
   ledgerLineYs,
   accidentalPlacement,
+  quarterRestPath,
+  QUARTER_REST_Y,
 } from "./staff-layout";
 
 describe("displayMidiToY", () => {
@@ -123,5 +125,26 @@ describe("accidentalPlacement", () => {
   it("returns a sharp glyph for F#4", () => {
     const p = accidentalPlacement(66);
     expect(p!.glyph).toBe("♯");
+  });
+});
+
+describe("quarterRestPath", () => {
+  it("returns a non-empty SVG path string", () => {
+    const d = quarterRestPath();
+    expect(d).toMatch(/^M/);
+    expect(d.length).toBeGreaterThan(20);
+  });
+
+  it("is stable (snapshot)", () => {
+    // If the path changes intentionally, update this literal and review
+    // the visual result in the browser. Do not update blindly.
+    expect(quarterRestPath()).toBe(
+      "M -2 -12 L 4 -4 L -4 4 L 3 10 L -1 14 " +
+        "C 2 8 -3 6 -4 10 L -5 2 C -2 4 2 4 -1 -2 Z",
+    );
+  });
+
+  it("exposes QUARTER_REST_Y anchored at the middle line", () => {
+    expect(QUARTER_REST_Y).toBe(STAFF_CENTER_Y);
   });
 });

@@ -95,3 +95,23 @@ export function ledgerLineYs(displayMidi: number): number[] {
 
   return ys;
 }
+
+/**
+ * Y position at which to anchor the quarter-rest glyph. The path
+ * coordinates are authored relative to (0, 0) and then translated to
+ * (x, QUARTER_REST_Y) in the Staff component.
+ */
+export const QUARTER_REST_Y = STAFF_CENTER_Y;
+
+/**
+ * SVG `<path d="…">` string for a stylized quarter-rest, authored in a
+ * ~20-pixel-tall box centered on the origin. Callers translate it to
+ * the desired (x, QUARTER_REST_Y) position in the staff's coordinate
+ * system.
+ */
+export function quarterRestPath(): string {
+  return (
+    "M -2 -12 L 4 -4 L -4 4 L 3 10 L -1 14 " +
+    "C 2 8 -3 6 -4 10 L -5 2 C -2 4 2 4 -1 -2 Z"
+  );
+}
