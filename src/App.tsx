@@ -2,11 +2,13 @@ import {
   createSignal,
   onCleanup,
   onMount,
+  Show,
   type Component,
 } from "solid-js";
 import ThemeToggle from "./components/ThemeToggle";
 import HeaderBar from "./components/HeaderBar";
 import Staff from "./components/Staff";
+import SettingsDialog from "./components/SettingsDialog";
 import { createPitchDetector } from "./audio/pitch-detector";
 import { frequencyToNote } from "./audio/notes";
 import {
@@ -27,17 +29,23 @@ const App: Component = () => {
     candidate: null,
     progress: 0,
   });
+
+  // Settings
   const [transpose, setTranspose] = createSignal(0);
   const [restDelayMs, setRestDelayMs] = createSignal(500);
+  const [windowMs, setWindowMs] = createSignal(1000);
+  const [settingsOpen, setSettingsOpen] = createSignal(false);
 
   const detector = createPitchDetector();
-  const engine = createStaffEngine({ windowMs: 250 });
+  const engine = createStaffEngine({ windowMs: windowMs() });
   let animationId: number | undefined;
 
-  // Debounce silence so short legato gaps don't immediately commit rests:
-  // we remember the last note detection and substitute it while silence
-  // is shorter than `restDelayMs`. Only genuinely sustained silence is
-  // reported as a rest to the engine.
+  const handleWindowMsChange = (ms: number) => {
+    setWindowMs(ms);
+    engine.setWindowMs(ms);
+  };
+
+  // Debounce silence so short legato gaps don't immediately commit rests.
   let lastNoteDetection: (Detection & { kind: "note" }) | null = null;
   let lastNoteSeenAt = 0;
 
@@ -52,7 +60,6 @@ const App: Component = () => {
         return d;
       }
     }
-    // Silence (or bad reading) — debounce against the most recent note.
     if (
       lastNoteDetection !== null &&
       nowTs - lastNoteSeenAt < restDelayMs()
@@ -73,9 +80,6 @@ const App: Component = () => {
         const freq = detector.getFrequency();
         setFrequency(freq);
         const detection = toDetection(freq, nowTs);
-        // Raw cents (from the detector) drive the live dial, independent
-        // of silence debouncing. When the mic is genuinely silent, show
-        // no cents even if the engine is still bridging a short gap.
         if (freq !== null) {
           const info = frequencyToNote(freq);
           setCents(info?.cents ?? null);
@@ -136,10 +140,8 @@ const App: Component = () => {
             cents={cents()}
             ghost={ghost().candidate}
             transpose={transpose()}
-            onTransposeChange={setTranspose}
-            restDelayMs={restDelayMs()}
-            onRestDelayChange={setRestDelayMs}
             onClear={handleClear}
+            onSettingsOpen={() => setSettingsOpen(true)}
           />
           <Staff committed={committed()} ghost={ghost()} />
         </>
@@ -164,6 +166,18 @@ const App: Component = () => {
           </button>
         </div>
       )}
+
+      <Show when={settingsOpen()}>
+        <SettingsDialog
+          transpose={transpose()}
+          onTransposeChange={setTranspose}
+          restDelayMs={restDelayMs()}
+          onRestDelayChange={setRestDelayMs}
+          windowMs={windowMs()}
+          onWindowMsChange={handleWindowMsChange}
+          onClose={() => setSettingsOpen(false)}
+        />
+      </Show>
     </div>
   );
 };

@@ -1,4 +1,4 @@
-import { type Component, Show } from "solid-js";
+import type { Component } from "solid-js";
 import HorizontalDial from "./HorizontalDial";
 import FingeringChart from "./FingeringChart";
 import { midiToStaffPitch } from "../audio/notes";
@@ -9,11 +9,9 @@ interface HeaderBarProps {
   frequency: number | null;
   cents: number | null;
   ghost: CommittedEvent | null;
-  transpose: number; // semitones; e.g. -2 for Bb trumpet
-  onTransposeChange: (value: number) => void;
-  restDelayMs: number;
-  onRestDelayChange: (value: number) => void;
+  transpose: number;
   onClear: () => void;
+  onSettingsOpen: () => void;
 }
 
 function accidentalSuffix(accidental: "natural" | "sharp" | "flat"): string {
@@ -26,8 +24,6 @@ function formatNoteName(
   concertMidi: number,
   transposeSemitones: number,
 ): string {
-  // Display MIDI = concert − transpose (selector represents the instrument's
-  // transposition; Bb = −2 means display is concert + 2).
   const displayMidi = concertMidi - transposeSemitones;
   const pitch = midiToStaffPitch(displayMidi);
   return `${pitch.letter}${accidentalSuffix(pitch.accidental)}`;
@@ -64,25 +60,13 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
     return `${props.frequency.toFixed(1)} Hz`;
   };
 
-  const handleTransposeChange = (e: Event) => {
-    const value = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-    if (!Number.isNaN(value)) props.onTransposeChange(value);
-  };
-
-  const handleRestDelayChange = (e: Event) => {
-    const value = parseInt((e.currentTarget as HTMLInputElement).value, 10);
-    if (!Number.isNaN(value) && value >= 0) {
-      props.onRestDelayChange(value);
-    }
-  };
-
   return (
     <div class="header-bar">
       <div class="header-note">
         <span class="header-note-name">{noteName()}</span>
-        <Show when={octave() !== null}>
+        {octave() !== null && (
           <span class="header-note-octave">{octave()}</span>
-        </Show>
+        )}
       </div>
       <div class="header-freq">{freqText()}</div>
       <div class="header-dial">
@@ -91,27 +75,9 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
       <div class="header-fingering">
         <FingeringChart fingering={fingering()} />
       </div>
-      <label class="header-transpose">
-        <span class="header-transpose-label">transpose</span>
-        <input
-          type="number"
-          class="header-transpose-input"
-          step="1"
-          value={props.transpose}
-          onInput={handleTransposeChange}
-        />
-      </label>
-      <label class="header-transpose">
-        <span class="header-transpose-label">rest delay (ms)</span>
-        <input
-          type="number"
-          class="header-transpose-input"
-          step="50"
-          min="0"
-          value={props.restDelayMs}
-          onInput={handleRestDelayChange}
-        />
-      </label>
+      <button class="header-icon-btn" type="button" onClick={props.onSettingsOpen} title="Settings">
+        ⚙
+      </button>
       <button class="header-clear" type="button" onClick={props.onClear}>
         Clear
       </button>

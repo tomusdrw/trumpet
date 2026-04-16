@@ -22,6 +22,7 @@ export interface StaffEngine {
   tick(detection: Detection, timestampMs: number): void;
   getGhost(): GhostState;
   getCommitted(): readonly CommittedEvent[];
+  setWindowMs(ms: number): void;
   clear(): void;
 }
 
@@ -45,7 +46,7 @@ function shouldCommit(
 }
 
 export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
-  const windowMs = opts.windowMs ?? 250;
+  let windowMs = opts.windowMs ?? 250;
 
   const committed: CommittedEvent[] = [];
   let last: CommittedEvent | null = null;
@@ -132,6 +133,10 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
 
     getCommitted() {
       return committed;
+    },
+
+    setWindowMs(ms: number) {
+      windowMs = ms;
     },
 
     clear() {
