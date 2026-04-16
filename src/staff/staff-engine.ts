@@ -55,7 +55,7 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
   let windowNow = 0;
   const tally = new Map<Key, number>();
   let leader: Key | null = null;
-  let leaderWorstCents = 0;
+  let leaderCentsValues: number[] = [];
 
   function keyOf(d: Detection): Key {
     return d.kind === "rest" ? "rest" : d.midi;
@@ -66,13 +66,28 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
     windowNow = nowTs;
     tally.clear();
     leader = null;
-    leaderWorstCents = 0;
+    leaderCentsValues = [];
+  }
+
+  /**
+   * Compute the trimmed-max of the leader's |cents| values: sort, drop
+   * the worst 10% of frames (attack transients, brief wobbles), then
+   * return the max of the remainder. With a 1000ms window at ~60 fps
+   * this ignores the ~6 worst frames.
+   */
+  function trimmedWorstCents(): number {
+    if (leaderCentsValues.length === 0) return 0;
+    const sorted = [...leaderCentsValues].sort((a, b) => a - b);
+    const trimCount = Math.max(1, Math.ceil(sorted.length * 0.1));
+    const trimmed = sorted.slice(0, sorted.length - trimCount);
+    if (trimmed.length === 0) return sorted[0];
+    return trimmed[trimmed.length - 1];
   }
 
   function leaderAsEvent(): CommittedEvent | null {
     if (leader === null) return null;
     if (leader === "rest") return { kind: "rest" };
-    return { kind: "note", midi: leader, worstCents: leaderWorstCents };
+    return { kind: "note", midi: leader, worstCents: trimmedWorstCents() };
   }
 
   return {
@@ -99,16 +114,16 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
 
       if (newLeader !== leader) {
         leader = newLeader;
-        leaderWorstCents = 0;
+        leaderCentsValues = [];
         if (leader !== "rest" && d.kind === "note" && d.midi === leader) {
-          leaderWorstCents = Math.abs(d.cents);
+          leaderCentsValues.push(Math.abs(d.cents));
         }
       } else if (
         leader !== "rest" &&
         d.kind === "note" &&
         d.midi === leader
       ) {
-        leaderWorstCents = Math.max(leaderWorstCents, Math.abs(d.cents));
+        leaderCentsValues.push(Math.abs(d.cents));
       }
 
       // Close the window?
@@ -146,7 +161,7 @@ export function createStaffEngine(opts: StaffEngineOptions = {}): StaffEngine {
       windowNow = 0;
       tally.clear();
       leader = null;
-      leaderWorstCents = 0;
+      leaderCentsValues = [];
     },
   };
 }

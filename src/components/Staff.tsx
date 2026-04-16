@@ -19,6 +19,7 @@ interface StaffProps {
 }
 
 const LEFT_MARGIN = 80; // room for the clef
+const NOTE_START = LEFT_MARGIN + LS * 2; // first note offset — room for accidentals + notehead
 const NOTE_SPACING = LS * 4; // horizontal spacing between committed events
 const VIEW_HEIGHT = 200;
 const VIEW_WIDTH = 1000; // logical viewBox width; the <svg> scales
@@ -34,7 +35,7 @@ function formatCents(worstCents: number): string {
 }
 
 const Staff: Component<StaffProps> = (props) => {
-  const eventX = (index: number) => LEFT_MARGIN + index * NOTE_SPACING;
+  const eventX = (index: number) => NOTE_START + index * NOTE_SPACING;
 
   const scrollX = () => {
     const lastX = eventX(props.committed.length + 1);

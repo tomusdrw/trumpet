@@ -185,9 +185,11 @@ describe("createStaffEngine — suppression", () => {
   });
 });
 
-describe("createStaffEngine — worst-cents tracking", () => {
-  it("records the max |cents| across all same-leader frames", () => {
+describe("createStaffEngine — worst-cents tracking (trimmed max, drops worst 10%)", () => {
+  it("trims the worst outlier before taking the max", () => {
     const e = createStaffEngine({ windowMs: 100 });
+    // |cents|: [3, 12, 7, 1, 4]. Sorted: [1, 3, 4, 7, 12].
+    // Trim 10% = ceil(5*0.1) = 1 → drop 12 → max of [1,3,4,7] = 7.
     e.tick(note(72, 3), 0);
     e.tick(note(72, -12), 25);
     e.tick(note(72, 7), 50);
@@ -198,15 +200,17 @@ describe("createStaffEngine — worst-cents tracking", () => {
     expect(c[0]).toEqual<CommittedEvent>({
       kind: "note",
       midi: 72,
-      worstCents: 12,
+      worstCents: 7,
     });
   });
 
   it("discards cents from a losing candidate", () => {
     const e = createStaffEngine({ windowMs: 100 });
     // Frame 1: D5 with -30 cents (briefly leads).
+    // Frames 2-5: C5 — wins by count.
+    // C5 |cents|: [2, 3, 4, 1]. Sorted: [1, 2, 3, 4].
+    // Trim ceil(4*0.1)=1 → drop 4 → max of [1,2,3] = 3.
     e.tick(note(74, -30), 0);
-    // Frames 2-5: C5 — wins by count; its worstCents is max 4.
     e.tick(note(72, 2), 25);
     e.tick(note(72, 3), 50);
     e.tick(note(72, 4), 75);
@@ -216,7 +220,7 @@ describe("createStaffEngine — worst-cents tracking", () => {
     expect(c[0]).toEqual<CommittedEvent>({
       kind: "note",
       midi: 72,
-      worstCents: 4,
+      worstCents: 3,
     });
   });
 
