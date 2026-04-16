@@ -39,6 +39,33 @@ const App: Component = () => {
   const detector = createPitchDetector();
   const engine = createStaffEngine({ windowMs: windowMs() });
   let animationId: number | undefined;
+  let wakeLock: WakeLockSentinel | null = null;
+
+  const acquireWakeLock = async () => {
+    try {
+      if ("wakeLock" in navigator) {
+        wakeLock = await navigator.wakeLock.request("screen");
+        wakeLock.addEventListener("release", () => {
+          wakeLock = null;
+        });
+      }
+    } catch {
+      // Wake Lock not available or denied — not critical
+    }
+  };
+
+  const releaseWakeLock = () => {
+    wakeLock?.release();
+    wakeLock = null;
+  };
+
+  // Re-acquire wake lock when page becomes visible again (browsers release it on hide)
+  const handleVisibilityChange = () => {
+    if (document.visibilityState === "visible" && started()) {
+      acquireWakeLock();
+    }
+  };
+  document.addEventListener("visibilitychange", handleVisibilityChange);
 
   const handleWindowMsChange = (ms: number) => {
     setWindowMs(ms);
@@ -74,6 +101,7 @@ const App: Component = () => {
       await detector.start();
       setStarted(true);
       setError(null);
+      await acquireWakeLock();
 
       const tick = () => {
         const nowTs = performance.now();
@@ -122,6 +150,8 @@ const App: Component = () => {
   onCleanup(() => {
     if (animationId !== undefined) cancelAnimationFrame(animationId);
     detector.stop();
+    releaseWakeLock();
+    document.removeEventListener("visibilitychange", handleVisibilityChange);
   });
 
   const handleClear = () => {
