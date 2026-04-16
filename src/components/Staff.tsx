@@ -76,8 +76,15 @@ const Staff: Component<StaffProps> = (props) => {
         {"\u{1D11E}"}
       </text>
 
+      {/* Clip notes so they don't scroll past the clef area */}
+      <defs>
+        <clipPath id="staff-clip">
+          <rect x={LEFT_MARGIN} y={0} width={VIEW_WIDTH - LEFT_MARGIN} height={VIEW_HEIGHT} />
+        </clipPath>
+      </defs>
+
       {/* Scrolling group for committed + ghost */}
-      <g transform={`translate(${-scrollX()}, 0)`}>
+      <g clip-path="url(#staff-clip)" transform={`translate(${-scrollX()}, 0)`}>
         <For each={props.committed}>
           {(event, index) => {
             const x = eventX(index());
