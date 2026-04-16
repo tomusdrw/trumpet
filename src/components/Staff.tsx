@@ -23,8 +23,6 @@ const NOTE_SPACING = LS * 4; // horizontal spacing between committed events
 const VIEW_HEIGHT = 200;
 const VIEW_WIDTH = 1000; // logical viewBox width; the <svg> scales
 const LABEL_Y = STAFF_BOTTOM_LINE_Y + LS * 4;
-const PROGRESS_Y = STAFF_BOTTOM_LINE_Y + LS * 3;
-const PROGRESS_HALF_WIDTH = LS * 1.2;
 
 function noteColor(worstCents: number): string {
   return zoneColor(centsZone(worstCents));
@@ -83,8 +81,9 @@ const Staff: Component<StaffProps> = (props) => {
         </clipPath>
       </defs>
 
-      {/* Scrolling group for committed + ghost */}
-      <g clip-path="url(#staff-clip)" transform={`translate(${-scrollX()}, 0)`}>
+      {/* Outer group clips; inner group scrolls */}
+      <g clip-path="url(#staff-clip)">
+      <g transform={`translate(${-scrollX()}, 0)`}>
         <For each={props.committed}>
           {(event, index) => {
             const x = eventX(index());
@@ -162,28 +161,11 @@ const Staff: Component<StaffProps> = (props) => {
             const x = eventX(props.committed.length);
             if (c.kind === "rest") {
               return (
-                <g>
-                  <g
-                    transform={`translate(${x}, ${QUARTER_REST_Y})`}
-                    opacity="0.4"
-                  >
-                    <path d={quarterRestPath()} fill="var(--text-secondary)" />
-                  </g>
-                  <rect
-                    x={x - PROGRESS_HALF_WIDTH}
-                    y={PROGRESS_Y}
-                    width={PROGRESS_HALF_WIDTH * 2}
-                    height={3}
-                    fill="var(--text-secondary)"
-                    opacity="0.15"
-                  />
-                  <rect
-                    x={x - PROGRESS_HALF_WIDTH}
-                    y={PROGRESS_Y}
-                    width={PROGRESS_HALF_WIDTH * 2 * props.ghost.progress}
-                    height={3}
-                    fill="var(--text-primary)"
-                  />
+                <g
+                  transform={`translate(${x}, ${QUARTER_REST_Y})`}
+                  opacity="0.4"
+                >
+                  <path d={quarterRestPath()} fill="var(--text-secondary)" />
                 </g>
               );
             }
@@ -192,62 +174,46 @@ const Staff: Component<StaffProps> = (props) => {
             const accidental = accidentalPlacement(displayMidi);
             const ledgers = ledgerLineYs(displayMidi);
             return (
-              <g>
-                <g opacity="0.5">
-                  <For each={ledgers}>
-                    {(ly) => (
-                      <line
-                        x1={x - LS * 0.8}
-                        x2={x + LS * 0.8}
-                        y1={ly}
-                        y2={ly}
-                        stroke="var(--text-secondary)"
-                        stroke-width="1"
-                      />
-                    )}
-                  </For>
-                  <Show when={accidental}>
-                    {(acc) => (
-                      <text
-                        x={x + acc().dx}
-                        y={acc().y + LS * 0.35}
-                        fill="var(--text-primary)"
-                        font-size={`${LS * 1.4}`}
-                        font-family="serif"
-                        text-anchor="middle"
-                      >
-                        {acc().glyph}
-                      </text>
-                    )}
-                  </Show>
-                  <ellipse
-                    cx={x}
-                    cy={y}
-                    rx={LS * 0.65}
-                    ry={LS * 0.5}
-                    fill="var(--text-primary)"
-                    transform={`rotate(-20 ${x} ${y})`}
-                  />
-                </g>
-                <rect
-                  x={x - PROGRESS_HALF_WIDTH}
-                  y={PROGRESS_Y}
-                  width={PROGRESS_HALF_WIDTH * 2}
-                  height={3}
-                  fill="var(--text-secondary)"
-                  opacity="0.15"
-                />
-                <rect
-                  x={x - PROGRESS_HALF_WIDTH}
-                  y={PROGRESS_Y}
-                  width={PROGRESS_HALF_WIDTH * 2 * props.ghost.progress}
-                  height={3}
+              <g opacity="0.5">
+                <For each={ledgers}>
+                  {(ly) => (
+                    <line
+                      x1={x - LS * 0.8}
+                      x2={x + LS * 0.8}
+                      y1={ly}
+                      y2={ly}
+                      stroke="var(--text-secondary)"
+                      stroke-width="1"
+                    />
+                  )}
+                </For>
+                <Show when={accidental}>
+                  {(acc) => (
+                    <text
+                      x={x + acc().dx}
+                      y={acc().y + LS * 0.35}
+                      fill="var(--text-primary)"
+                      font-size={`${LS * 1.4}`}
+                      font-family="serif"
+                      text-anchor="middle"
+                    >
+                      {acc().glyph}
+                    </text>
+                  )}
+                </Show>
+                <ellipse
+                  cx={x}
+                  cy={y}
+                  rx={LS * 0.65}
+                  ry={LS * 0.5}
                   fill="var(--text-primary)"
+                  transform={`rotate(-20 ${x} ${y})`}
                 />
               </g>
             );
           }}
         </Show>
+      </g>
       </g>
     </svg>
   );
