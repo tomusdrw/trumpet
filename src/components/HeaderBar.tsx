@@ -10,8 +10,10 @@ interface HeaderBarProps {
   cents: number | null;
   ghost: CommittedEvent | null;
   transpose: number;
+  mode: "free-play" | "training";
   onClear: () => void;
   onSettingsOpen: () => void;
+  onTrainClick: () => void;
 }
 
 function accidentalSuffix(accidental: "natural" | "sharp" | "flat"): string {
@@ -75,7 +77,20 @@ const HeaderBar: Component<HeaderBarProps> = (props) => {
       <div class="header-fingering">
         <FingeringChart fingering={fingering()} />
       </div>
-      <button class="header-icon-btn" type="button" onClick={props.onSettingsOpen} title="Settings">
+      <button
+        class="header-icon-btn"
+        type="button"
+        onClick={props.onTrainClick}
+        title={props.mode === "training" ? "Free play" : "Train"}
+      >
+        {props.mode === "training" ? "⟵" : "🎯"}
+      </button>
+      <button
+        class="header-icon-btn"
+        type="button"
+        onClick={props.onSettingsOpen}
+        title="Settings"
+      >
         ⚙
       </button>
       <button class="header-clear" type="button" onClick={props.onClear}>

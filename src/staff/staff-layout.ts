@@ -115,3 +115,36 @@ export function quarterRestPath(): string {
     "C 2 8 -3 6 -4 10 L -5 2 C -2 4 2 4 -1 -2 Z"
   );
 }
+
+export interface ScrollXArgs {
+  committedCount: number;
+  remainingTargets: number;
+  noteStart: number;
+  noteSpacing: number;
+  viewWidth: number;
+  leftMargin: number;
+}
+
+/**
+ * X scroll offset for the staff's event-containing group.
+ *
+ * Free-play mode (remainingTargets === 0): keep the ghost near the right
+ * edge — identical behavior to the original inline formula.
+ *
+ * Training mode (remainingTargets > 0): keep the ghost roughly 1/3 from
+ * the left of the visible region so upcoming targets are visible ahead of
+ * the current note being played.
+ */
+export function computeScrollX(a: ScrollXArgs): number {
+  const eventX = (i: number) => a.noteStart + i * a.noteSpacing;
+  const ghostIndex = a.committedCount;
+
+  if (a.remainingTargets === 0) {
+    const lastX = eventX(ghostIndex + 1);
+    const overflow = lastX - (a.viewWidth - a.leftMargin / 2);
+    return overflow > 0 ? overflow : 0;
+  }
+  const ghostX = eventX(ghostIndex);
+  const desiredScreenX = a.leftMargin + (a.viewWidth - a.leftMargin) / 3;
+  return Math.max(0, ghostX - desiredScreenX);
+}

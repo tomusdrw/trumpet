@@ -9,6 +9,7 @@ import ThemeToggle from "./components/ThemeToggle";
 import HeaderBar from "./components/HeaderBar";
 import Staff from "./components/Staff";
 import SettingsDialog from "./components/SettingsDialog";
+import TrainingScreen from "./components/TrainingScreen";
 import { createPitchDetector } from "./audio/pitch-detector";
 import { frequencyToNote } from "./audio/notes";
 import {
@@ -17,6 +18,8 @@ import {
   type Detection,
   type GhostState,
 } from "./staff/staff-engine";
+
+type Mode = "free-play" | "training";
 
 const App: Component = () => {
   const [started, setStarted] = createSignal(false);
@@ -30,11 +33,11 @@ const App: Component = () => {
     progress: 0,
   });
 
-  // Settings
   const [transpose, setTranspose] = createSignal(0);
   const [restDelayMs, setRestDelayMs] = createSignal(500);
   const [windowMs, setWindowMs] = createSignal(1000);
   const [settingsOpen, setSettingsOpen] = createSignal(false);
+  const [mode, setMode] = createSignal<Mode>("free-play");
 
   const detector = createPitchDetector();
   const engine = createStaffEngine({ windowMs: windowMs() });
@@ -50,7 +53,7 @@ const App: Component = () => {
         });
       }
     } catch {
-      // Wake Lock not available or denied — not critical
+      /* Wake Lock not available or denied — not critical */
     }
   };
 
@@ -59,7 +62,6 @@ const App: Component = () => {
     wakeLock = null;
   };
 
-  // Re-acquire wake lock when page becomes visible again (browsers release it on hide)
   const handleVisibilityChange = () => {
     if (document.visibilityState === "visible" && started()) {
       acquireWakeLock();
@@ -72,7 +74,6 @@ const App: Component = () => {
     engine.setWindowMs(ms);
   };
 
-  // Debounce silence so short legato gaps don't immediately commit rests.
   let lastNoteDetection: (Detection & { kind: "note" }) | null = null;
   let lastNoteSeenAt = 0;
 
@@ -142,7 +143,7 @@ const App: Component = () => {
         await startListening();
       }
     } catch {
-      // permissions API not supported, show start button
+      /* permissions API not supported, show start button */
     }
     setLoading(false);
   });
@@ -154,10 +155,15 @@ const App: Component = () => {
     document.removeEventListener("visibilitychange", handleVisibilityChange);
   });
 
-  const handleClear = () => {
+  const clearStaff = () => {
     engine.clear();
     setCommitted([]);
     setGhost({ candidate: null, progress: 0 });
+  };
+
+  const handleTrainClick = () => {
+    clearStaff();
+    setMode(mode() === "training" ? "free-play" : "training");
   };
 
   return (
@@ -170,10 +176,25 @@ const App: Component = () => {
             cents={cents()}
             ghost={ghost().candidate}
             transpose={transpose()}
-            onClear={handleClear}
+            mode={mode()}
+            onClear={clearStaff}
             onSettingsOpen={() => setSettingsOpen(true)}
+            onTrainClick={handleTrainClick}
           />
-          <Staff committed={committed()} ghost={ghost()} />
+          <Show
+            when={mode() === "training"}
+            fallback={<Staff committed={committed()} ghost={ghost()} />}
+          >
+            <TrainingScreen
+              committed={committed()}
+              ghost={ghost()}
+              onClearStaff={clearStaff}
+              onExit={() => {
+                clearStaff();
+                setMode("free-play");
+              }}
+            />
+          </Show>
         </>
       )}
 

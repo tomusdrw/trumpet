@@ -9,6 +9,7 @@ import {
   accidentalPlacement,
   quarterRestPath,
   QUARTER_REST_Y,
+  computeScrollX,
 } from "./staff-layout";
 
 describe("displayMidiToY", () => {
@@ -146,5 +147,50 @@ describe("quarterRestPath", () => {
 
   it("exposes QUARTER_REST_Y anchored at the middle line", () => {
     expect(QUARTER_REST_Y).toBe(STAFF_CENTER_Y);
+  });
+});
+
+describe("computeScrollX — free-play mode (no targets)", () => {
+  const layout = {
+    noteStart: 100,
+    noteSpacing: 56,
+    viewWidth: 1000,
+    leftMargin: 80,
+  };
+
+  it("returns 0 when the ghost fits within the viewport", () => {
+    const x = computeScrollX({ committedCount: 3, remainingTargets: 0, ...layout });
+    expect(x).toBe(0);
+  });
+
+  it("scrolls to keep the ghost near the right edge once the staff fills", () => {
+    // committedCount = 20 → ghost at eventX(20) = 100 + 20*56 = 1220.
+    // overflow = eventX(21) - (1000 - 40) = 1276 - 960 = 316.
+    const x = computeScrollX({ committedCount: 20, remainingTargets: 0, ...layout });
+    expect(x).toBe(316);
+  });
+});
+
+describe("computeScrollX — training mode (remainingTargets > 0)", () => {
+  const layout = {
+    noteStart: 100,
+    noteSpacing: 56,
+    viewWidth: 1000,
+    leftMargin: 80,
+  };
+
+  it("returns 0 for short challenges (ghost + targets fit)", () => {
+    const x = computeScrollX({ committedCount: 0, remainingTargets: 5, ...layout });
+    expect(x).toBe(0);
+  });
+
+  it("keeps the ghost ~1/3 from the left once past the visible capacity", () => {
+    // committedCount = 15, remainingTargets = 10.
+    // ghostX = 100 + 15*56 = 940.
+    // desiredGhostScreenX = leftMargin + (viewWidth - leftMargin) / 3
+    //                     = 80 + 920/3 = 80 + 306.666... ≈ 386.67.
+    // scrollX = max(0, 940 - 386.67) ≈ 553.33.
+    const x = computeScrollX({ committedCount: 15, remainingTargets: 10, ...layout });
+    expect(x).toBeCloseTo(553.33, 1);
   });
 });
