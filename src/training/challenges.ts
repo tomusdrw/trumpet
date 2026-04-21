@@ -8,6 +8,7 @@ export interface Challenge {
   id: string;
   title: string;
   group: ChallengeGroup;
+  description?: string;
   targets: readonly Target[];
 }
 
